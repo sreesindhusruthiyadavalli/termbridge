@@ -3,47 +3,84 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
-
+	"github.com/creack/pty"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"log"
+	"net/http"
+	"os"
+	"os/exec"
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true }, // Dev only
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 func main() {
 	port := flag.String("port", "8080", "server port")
-	cmd := flag.String("cmd", "bash", "shell command")
+	cmd := flag.String("cmd", "/bin/bash", "shell command") // Fixed: full path
 	flag.Parse()
 
 	r := gin.Default()
 
-	// Health check
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "cmd": *cmd})
 	})
 
-	// WS endpoint (Phase 2 stub)
 	r.GET("/ws", func(c *gin.Context) {
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			fmt.Printf("WS upgrade failed: %v\n", err)
+			log.Printf("WS upgrade failed: %v", err)
 			return
 		}
-		defer conn.Close()
-		fmt.Println("WS connected (stub)")
-		for {
-			_, _, err := conn.ReadMessage()
-			if err != nil {
-				break
-			}
-			// Echo stub for testing
-			conn.WriteMessage(websocket.TextMessage, []byte("echo: pong"))
+
+		// FIXED: Proper bash command with args
+		shellCmd := exec.Command("/bin/bash")
+		shellCmd.Env = append(os.Environ(), "TERM=xterm-256color")
+
+		ptyShell, err := pty.Start(shellCmd)
+		if err != nil {
+			log.Printf("PTY spawn failed: %v", err)
+			conn.WriteMessage(websocket.TextMessage, []byte("Shell spawn error"))
+			conn.Close()
+			return
 		}
+
+		log.Println("Shell session started: bash")
+		pty.Setsize(ptyShell, &pty.Winsize{Cols: 120, Rows: 40})
+
+		// Shell -> WS (stdout)
+		go func() {
+			defer ptyShell.Close()
+			defer conn.Close()
+			buf := make([]byte, 4096)
+			for {
+				n, err := ptyShell.Read(buf)
+				if err != nil {
+					log.Printf("Shell read error: %v", err)
+					break
+				}
+				// Send as text for better terminal handling
+				conn.WriteMessage(websocket.TextMessage, buf[:n])
+			}
+		}()
+
+		// WS -> Shell (stdin) - FIXED: Add \r\n for bash
+		go func() {
+			defer ptyShell.Close()
+			defer conn.Close()
+			for {
+				_, msg, err := conn.ReadMessage()
+				if err != nil {
+					break
+				}
+				// Convert \n to \r\n for proper bash line handling
+				msg = append(msg, '\r', '\n')
+				ptyShell.Write(msg)
+			}
+		}()
 	})
 
-	fmt.Printf("TermBridge running on :%s (cmd: %s)\n", *port, *cmd)
+	fmt.Printf("TermBridge running on :%s\n", *port)
 	r.Run(":" + *port)
 }
