@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/creack/pty"
@@ -22,6 +23,11 @@ func main() {
 	flag.Parse()
 
 	r := gin.Default()
+
+	r.Static("/static", "./static")
+	r.GET("/", func(c *gin.Context) {
+		c.File("./static/index.html")
+	})
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "cmd": *cmd})
@@ -70,12 +76,30 @@ func main() {
 			defer ptyShell.Close()
 			defer conn.Close()
 			for {
-				_, msg, err := conn.ReadMessage()
+				msgType, msg, err := conn.ReadMessage()
 				if err != nil {
 					break
 				}
+
+				if msgType == websocket.TextMessage {
+					// Check for resize command
+					var resize struct {
+						Resize bool `json:"resize"`
+						Cols   int  `json:"cols"`
+						Rows   int  `json:"rows"`
+					}
+					if json.Unmarshal(msg, &resize) == nil && resize.Resize {
+						pty.Setsize(ptyShell, &pty.Winsize{
+							Cols: uint16(resize.Cols),
+							Rows: uint16(resize.Rows),
+						})
+						log.Printf("Resized to %dx%d", resize.Cols, resize.Rows)
+						continue
+					}
+				}
+
 				// Convert \n to \r\n for proper bash line handling
-				msg = append(msg, '\r', '\n')
+				// msg = append(msg, '\r', '\n')
 				ptyShell.Write(msg)
 			}
 		}()
