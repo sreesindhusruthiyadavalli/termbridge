@@ -1,18 +1,108 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>TermBridge - Browser Shell</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css"/>
+    <title>TermBridge</title>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css"/>
     <style>
-        body { margin: 0; padding: 10px; background: #1e1e1e; font-family: monospace; }
-        #terminal { height: 90vh; }
-        #status { color: #888; padding: 10px; }
+        body { margin: 0; padding: 20px; background: #1e1e1e; color: #fff; font-family: monospace; }
+        #login { max-width: 400px; margin: 0 auto; }
+        input { width: 100%; padding: 10px; margin: 10px 0; background: #333; color: #fff; border: 1px solid #555; }
+        button { width: 100%; padding: 12px; background: #0f0; color: #000; border: none; cursor: pointer; }
+        #terminal-container { height: 80vh; display: none; }
     </style>
 </head>
 <body>
-<div id="status">Connecting to shell...</div>
-<div id="terminal"></div>
-<script src="/static/term.js"></script>
+<div id="login">
+    <h2>🚀 TermBridge</h2>
+    <input id="username" placeholder="Username" value="admin">
+    <input id="password" type="password" placeholder="Password" value="password">
+    <button onclick="login()">Login</button>
+    <div id="status">Ready</div>
+</div>
+<div id="terminal-container">
+    <div id="status2">Connecting...</div>
+    <div id="terminal"></div>
+</div>
+
+<script>
+    let token = null;
+    let term = null;
+    let ws = null;
+
+    async function login() {
+        console.log('Login clicked'); // DEBUG
+
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const status = document.getElementById('status');
+
+        status.textContent = 'Logging in...';
+
+        try {
+            console.log('Sending POST /api/login'); // DEBUG
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            console.log('Response status:', response.status); // DEBUG
+
+            if (response.ok) {
+                const data = await response.json();
+                token = data.token;
+                console.log('Token received:', token.substring(0, 20) + '...'); // DEBUG
+                document.getElementById('login').style.display = 'none';
+                document.getElementById('terminal-container').style.display = 'block';
+                initTerminal();
+            } else {
+                status.textContent = `Login failed: ${response.status}`;
+                console.error('Login failed:', await response.text());
+            }
+        } catch (error) {
+            status.textContent = 'Network error';
+            console.error('Fetch error:', error);
+        }
+    }
+
+    function initTerminal() {
+        term = new Terminal({
+            cursorBlink: true,
+            theme: { background: '#1e1e1e', foreground: '#fff', cursor: '#0ff' }
+        });
+        term.open(document.getElementById('terminal'));
+
+        const wsUrl = `ws://${location.host}/ws?token=${encodeURIComponent(token)}`;
+        console.log('Connecting WS:', wsUrl); // DEBUG
+
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            console.log('WS connected');
+            document.getElementById('status2').textContent = 'Connected!';
+            term.write('\r\n');
+        };
+
+        ws.onmessage = (event) => term.write(event.data);
+        ws.onclose = () => {
+            console.log('WS closed');
+            term.write('\r\n[Disconnected]');
+        };
+        ws.onerror = (err) => console.error('WS error:', err);
+
+        term.onData((data) => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(data);
+            }
+        });
+
+        // Simple resize (no FitAddon dependency)
+        window.addEventListener('resize', () => {
+            term.fit = () => {}; // Stub
+            term.scrollToBottom();
+        });
+    }
+</script>
 </body>
 </html>
