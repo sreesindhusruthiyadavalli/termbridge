@@ -1,49 +1,88 @@
-# termbridge
-Go CLI turning browser WebSockets into remote shell access
+<b>Method 1: Global Install (Recommended)</b>
 
-<div style="border: 2px solid #8a2be2; padding: 20px; border-radius: 8px; background: #1a1a2e; color: #000000; font-family: monospace;">
+``` 
+# 1. Install globally (Go 1.22+ required)
+go install github.com/sreesindhusruthiyadavalli/termbridge@latest
 
-# 🚀 TermBridge
-
-**Go CLI → Browser Terminal**  
-Single binary • JWT Auth • static UI • PTY Shell
-
-```bash
-go install github.com/YOURUSER/termbridge@latest
+# 2. Run server
 termbridge
-# → http://localhost:8080 (admin/password)
+
+# 3. Browser: http://localhost:8080
+# Login: admin / password → Full terminal access!
 ```
 
-[![Demo](./demo.gif)](./demo.gif)
+<b>Method 2: Clone & Run (No Go install needed)</b>
 
-</div>
+```
+# 1. Clone repo
+git clone https://github.com/<YOURUSERNAME>/termbridge.git
+cd termbridge
 
+# 2. Run (auto-downloads dependencies)
+go run main.go
 
+# 3. http://localhost:8080 → admin/password
+```
 
-# Test1: TermBridge
-- go run main.go -port=8080 -cmd=bash
-- # New terminal: curl localhost:8080/health → {"status":"ok","cmd":"bash"}
-- wscat -c ws://localhost:8080/ws → sends/receives echo
+<b>Method 3: Docker (Production)</b>
 
-# Demo: TermBridge
-  $ ls                    # Shows main.go, go.mod
-  $ whoami               # Shows your username  
-  $ pwd                  # Shows project dir
-  $ go version          # Shows Go version
-  $ PS1="🚀 TermBridge> "   # Custom prompt
-  🚀 TermBridge> htop     # Install if needed: sudo apt install htop
-# Resize browser window → watch terminal resize live!
-🚀 TermBridge> exit
+```
+# 1. Build & run
+docker build -t termbridge .
+docker run -p 8080:8080 termbridge
 
-# Docker run Nginx to serve static files
-Terminal1: go run main.go -port=8000
+# 2. http://localhost:8080 → admin/password
+```
 
-Terminal2: docker run --rm -p 80:80 \
--v $(pwd)/nginx.conf:/etc/nginx/conf.d/default.conf \
--v $(pwd)/static:/usr/share/nginx/html/static:ro \
-nginx:alpine
+<b>README Usage Section</b>
 
-# Access http://localhost/static in browser
-http://localhost/           ← Nginx port 80 → Go port 8000
-POST localhost/api/login    ← Nginx 80 → Go 8000/api/login  
-ws://localhost/ws?token=…   ← Nginx 80 → Go 8000/ws
+```
+## 🚀 Quick Start
+
+```bash
+go install github.com/sreesindhusruthiyadavalli/termbridge@latest
+termbridge
+
+```
+
+<b>Browser: http://localhost:8080</b>
+<b>Login: admin / password</b>
+
+<b>Flags</b>
+```
+termbridge -port=8000           # Custom port
+termbridge -cmd="zsh"          # Custom shell
+```
+
+<b>## **What Users Get Instantly**</b>
+
+✅ Single Go binary (5MB)
+✅ JWT authentication (admin/password)
+✅ Fullscreen xterm.js terminal
+✅ ls, htop, vim, kubectl - ALL WORK
+✅ Window resize support
+✅ Zero configuration
+
+<b>Production deployment</b>
+
+```
+## **Production Deployment**
+```bash
+# With Nginx reverse proxy
+docker-compose up
+
+# Or systemd service
+sudo cp termbridge /usr/local/bin/
+sudo systemctl enable termbridge
+
+```
+
+<b>Expected user experience</b>
+
+```
+$ go install github.com/sreesindhusruthiyadavalli/termbridge@latest  
+$ termbridge                                           
+# Auto-opens browser or shows: http://localhost:8080
+# Login screen → admin/password → "🚀 Welcome to TermBridge!" → bash shell
+
+```
